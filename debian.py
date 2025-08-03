@@ -4,78 +4,75 @@ import os
 import subprocess
 
 os.system("clear")
-input("Press Enter to continiune...")
-print("Starting scrypt...")
+input("Press Enter to continue...")
+print("Starting script...")
 
-# Updating system
+# Update system
 os.system("sudo apt update && sudo apt upgrade -y")
 
-# Installing Apache2
+# Install Apache
 input("Press Enter to install Apache...")
-print("Installing Apache2...")
+print("Installing Apache...")
+os.system("sudo apt install apache2 -y")
+os.system("sudo systemctl enable --now apache2")
 
-os.system("sudo apt install apache2 -y && sudo systemctl enable --now apache2")
-
-# Installing MariaDB
+# Install MariaDB
 input("Press Enter to install MariaDB...")
 print("Installing MariaDB...")
+os.system("sudo apt install mariadb-server -y")
+os.system("sudo systemctl enable --now mariadb")
+os.system("sudo mysql_secure_installation")
 
-os.system("sudo apt install mariadb-server -y"
-"sudo systemctl enable --now mariadb"
-"sudo mysql_secure_installation"
-)
-
-# Installing PHP
+# Install PHP and modules
 input("Press Enter to install PHP...")
 print("Installing PHP and modules...")
-
 os.system("sudo apt install php libapache2-mod-php php-mysql -y")
+os.system("sudo systemctl restart apache2")
 
 # Create Database for MariaDB
-input("Press Enter to continiune...")
-print("Create database for MariaDB")
+input("Press Enter to continue...")
+print("Creating database for MariaDB")
 
-print("Write a name of database")
-database_name = input('Name of database: ')
-
-print("Write a name of database user")
-database_user = input('Name of database user: ')
-
-print("Write a password for database user")
-database_passwd = input('Password for database user: ')
+database_name = input('Database name: ')
+database_user = input('Database username: ')
+database_passwd = input('Database user password: ')
 
 command = (
     f"sudo mysql -u root -p -e "
     f"'CREATE DATABASE {database_name}; "
-    f"CREATE USER \"{database_user}\"@\"localhost\" IDENTIFIED BY \"{database_passwd}\"; "
-    f"GRANT ALL PRIVILEGES ON {database_name}.* TO \"{database_user}\"@\"localhost\"; "
+    f"CREATE USER '{database_user}'@'localhost' IDENTIFIED BY '{database_passwd}'; "
+    f"GRANT ALL PRIVILEGES ON {database_name}.* TO '{database_user}'@'localhost'; "
     f"FLUSH PRIVILEGES;'"
-    f"EXIT;"
 )
-
 os.system(command)
 
-# Ufw
-input("Press Enter to install and enable ufw")
-print("Enable ufw")
+# Configure UFW firewall
+input("Press Enter to configure UFW...")
+print("Configuring UFW firewall...")
+os.system("sudo ufw allow 3306/tcp")
+os.system("sudo ufw enable")
 
-os.system("sudo ufw allow 3306/tcp"
-"sudo ufw enable"
-)
+print("Add HTTP (80) and HTTPS (443) ports?")
+ufw_port = input("Answer (1 = yes, 0 = no): ")
 
-print("Add a 80 and 443 port to ufw?")
-ufw_port = input("Answer(yes or no): ")
-
-if ufw_port = y or yes or Yes:
-       os.system("sudo ufw allow 80/tcp" && "sudo ufw allow 443/tcp")
+if ufw_port == "1":
+    os.system("sudo ufw allow 80/tcp")
+    os.system("sudo ufw allow 443/tcp")
+    print("Success: Ports 80 (HTTP) and 443 (HTTPS) are now open")
 else:
-       print("Skiped")	
+    print("Skipped port configuration")
 
-# Checkout
-print("Make a checkout of Apache?")
-checkout_answer = input("Answer(yes or no): ")
-if checkout_answer = y or yes or Yes:
-      print("Apache Service")
-      os.system("curl -I localhost")
+# Verify installation
+print("Test Apache installation?")
+checkout_answer = input("Answer (1 = yes, 0 = no): ")
+
+if checkout_answer == "1":
+    print("Testing Apache service...")
+    os.system("curl -I localhost")
 else:
-      print("Finish!")
+    print("Installation complete!")
+    subprocess.run(["python3", "menu.py"])
+
+
+
+
