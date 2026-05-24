@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VPN Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--card:#161b22;--border:#30363d;
+  --text:#c9d1d9;--muted:#8b949e;--accent:#58a6ff;
+  --green:#3fb950;--red:#f85149;--yellow:#d29922;
+  --radius:8px;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh}
+
+/* ── Layout ── */
+.layout{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--card);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:10}
+.main{margin-left:220px;padding:24px;flex:1}
+
+/* ── Sidebar ── */
+.sidebar-logo{padding:20px 16px;border-bottom:1px solid var(--border);
+  font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
+.sidebar-logo svg{color:var(--accent)}
+.sidebar-nav{padding:12px 8px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;
+  cursor:pointer;color:var(--muted);transition:.15s;margin-bottom:2px;user-select:none}
+.nav-item:hover{background:rgba(88,166,255,.08);color:var(--text)}
+.nav-item.active{background:rgba(88,166,255,.15);color:var(--accent);font-weight:500}
+.nav-item svg{flex-shrink:0}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+#clock{font-variant-numeric:tabular-nums}
+
+/* ── Page header ── */
+.page-title{font-size:20px;font-weight:600;margin-bottom:20px}
+
+/* ── Metric cards ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card-label{font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.card-value{font-size:26px;font-weight:600;line-height:1;margin-bottom:4px}
+.card-sub{font-size:12px;color:var(--muted)}
+.card-chart{margin-top:10px;height:42px}
+
+/* ── Progress bar ── */
+.bar{height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-top:8px}
+.bar-fill{height:100%;border-radius:2px;transition:width .4s}
+.bar-green{background:var(--green)}
+.bar-yellow{background:var(--yellow)}
+.bar-red{background:var(--red)}
+
+/* ── Service cards ── */
+.services{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:20px}
+.svc-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+.svc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.svc-name{font-weight:600;font-size:15px}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;
+  padding:3px 9px;border-radius:20px;font-weight:500}
+.badge-green{background:rgba(63,185,80,.15);color:var(--green)}
+.badge-red{background:rgba(248,81,73,.15);color:var(--red)}
+.badge-yellow{background:rgba(210,153,34,.15);color:var(--yellow)}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.svc-stats{display:flex;gap:18px;margin-bottom:14px}
+.svc-stat{display:flex;flex-direction:column}
+.svc-stat-val{font-size:22px;font-weight:600}
+.svc-stat-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+.svc-actions{display:flex;gap:6px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;
+  border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;
+  font-size:13px;transition:.15s;font-family:inherit}
+.btn:hover{background:rgba(255,255,255,.06)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#0d1117;font-weight:600}
+.btn-primary:hover{opacity:.85}
+.btn-danger{border-color:var(--red);color:var(--red)}
+.btn-danger:hover{background:rgba(248,81,73,.1)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── Network row ── */
+.net-row{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;display:flex;gap:32px;flex-wrap:wrap}
+.net-item{display:flex;flex-direction:column}
+.net-val{font-size:18px;font-weight:600}
+.net-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:0;margin-bottom:18px;border-bottom:1px solid var(--border)}
+.tab{padding:10px 18px;cursor:pointer;color:var(--muted);font-size:14px;
+  border-bottom:2px solid transparent;transition:.15s;margin-bottom:-1px}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-color:var(--accent)}
+
+/* ── Table ── */
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead tr{border-bottom:1px solid var(--border)}
+th{padding:10px 14px;text-align:left;font-size:12px;color:var(--muted);
+   font-weight:500;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid rgba(48,54,61,.5);font-size:13px}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.025)}
+.monospace{font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;
+  max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Add-client form ── */
+.add-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.input{background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:7px 12px;border-radius:6px;font-size:13px;font-family:inherit;outline:none;
+  transition:.15s}
+.input:focus{border-color:var(--accent)}
+.input-sm{max-width:220px}
+
+/* ── Log viewer ── */
+.log-controls{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.log-box{background:#010409;border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;
+  line-height:1.6;color:#adbac7;height:500px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.log-line-err{color:var(--red)}
+.log-line-warn{color:var(--yellow)}
+.log-line-info{color:#79c0ff}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:20px;right:20px;z-index:1000;display:flex;flex-direction:column;gap:8px}
+.toast-item{padding:10px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.4);
+  animation:slideIn .2s ease;max-width:320px}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast-ok{background:#1a3a2a;border:1px solid var(--green);color:var(--green)}
+.toast-err{background:#3a1a1a;border:1px solid var(--red);color:var(--red)}
+
+/* ── Util ── */
+.section{margin-bottom:24px}
+.row{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.text-muted{color:var(--muted)}
+.text-green{color:var(--green)}
+.text-red{color:var(--red)}
+.hidden{display:none!important}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.key-box{background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  padding:10px 12px;font-family:monospace;font-size:11px;word-break:break-all;
+  margin-top:6px;max-height:80px;overflow-y:auto}
+.copy-btn{font-size:11px;cursor:pointer;color:var(--accent);background:none;border:none;
+  font-family:inherit;padding:0;text-decoration:underline}
+
+@media(max-width:700px){
+  .sidebar{width:100%;height:auto;position:relative;flex-direction:row;flex-wrap:wrap}
+  .main{margin-left:0}
+  .layout{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+    </svg>
+    VPN Monitor
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+      </svg>
+      Обзор
+    </div>
+    <div class="nav-item" data-page="services" onclick="showPage('services',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+      </svg>
+      Сервисы
+    </div>
+    <div class="nav-item" data-page="clients" onclick="showPage('clients',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      Клиенты
+    </div>
+    <div class="nav-item" data-page="logs" onclick="showPage('logs',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+      </svg>
+      Логи
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div id="clock"></div>
+    <div style="margin-top:4px">Обновление: <span id="last-update">—</span></div>
+  </div>
+</aside>
+
+<!-- Main content -->
+<main class="main">
+
+  <!-- ── Dashboard ── -->
+  <div id="page-dashboard">
+    <div class="page-title">Обзор сервера</div>
+
+    <div class="cards" id="sys-cards">
+      <div class="card">
+        <div class="card-label">CPU</div>
+        <div class="card-value" id="cpu-val">—</div>
+        <div class="card-sub" id="cpu-sub">— ядер</div>
+        <div class="bar"><div class="bar-fill bar-green" id="cpu-bar" style="width:0%"></div></div>
+        <div class="card-chart"><canvas id="cpu-chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Память</div>
+        <div class="card-value" id="mem-val">—</div>
+        <div class="card-sub" id="mem-sub">— / —</div>
+        <div class="bar"><div class="bar-fill bar-green" id="mem-bar" style="width:0%"></div></div>
+        <div class="card-chart"><canvas id="mem-chart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Диск /</div>
+        <div class="card-value" id="disk-val">—</div>
+        <div class="card-sub" id="disk-sub">— / —</div>
+        <div class="bar"><div class="bar-fill bar-green" id="disk-bar" style="width:0%"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-label">Аптайм</div>
+        <div class="card-value" id="uptime-val" style="font-size:20px">—</div>
+        <div class="card-sub" id="load-sub">LA: —</div>
+      </div>
+    </div>
+
+    <div class="net-row section" id="net-row">
+      <div class="net-item">
+        <span class="net-val" id="net-up">—</span>
+        <span class="net-lbl">↑ Отправка</span>
+      </div>
+      <div class="net-item">
+        <span class="net-val" id="net-down">—</span>
+        <span class="net-lbl">↓ Приём</span>
+      </div>
+      <div class="net-item">
+        <span class="net-val" id="net-total-up">—</span>
+        <span class="net-lbl">Всего отправлено</span>
+      </div>
+      <div class="net-item">
+        <span class="net-val" id="net-total-down">—</span>
+        <span class="net-lbl">Всего получено</span>
+      </div>
+    </div>
+
+    <div class="page-title" style="font-size:16px;margin-bottom:14px">Статус VPN</div>
+    <div class="services" id="dash-services">
+      <div class="svc-card" id="dash-awg">
+        <div class="svc-header">
+          <span class="svc-name">AmneziaWG</span>
+          <span class="badge badge-yellow"><span class="badge-dot"></span>загрузка</span>
+        </div>
+        <div class="svc-stats">
+          <div class="svc-stat"><span class="svc-stat-val" id="awg-conn">—</span><span class="svc-stat-lbl">Подключено</span></div>
+          <div class="svc-stat"><span class="svc-stat-val" id="awg-total">—</span><span class="svc-stat-lbl">Всего пиров</span></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">WireGuard · Docker</div>
+      </div>
+      <div class="svc-card" id="dash-xray">
+        <div class="svc-header">
+          <span class="svc-name">VLESS (xray)</span>
+          <span class="badge badge-yellow"><span class="badge-dot"></span>загрузка</span>
+        </div>
+        <div class="svc-stats">
+          <div class="svc-stat"><span class="svc-stat-val" id="xray-conn">—</span><span class="svc-stat-lbl">Подключений</span></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">xray-core · Docker</div>
+      </div>
+      <div class="svc-card" id="dash-h2">
+        <div class="svc-header">
+          <span class="svc-name">Hysteria2</span>
+          <span class="badge badge-yellow"><span class="badge-dot"></span>загрузка</span>
+        </div>
+        <div class="svc-stats">
+          <div class="svc-stat"><span class="svc-stat-val" id="h2-conn">—</span><span class="svc-stat-lbl">Сессий</span></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">systemd · UDP</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Services ── -->
+  <div id="page-services" class="hidden">
+    <div class="page-title">Управление сервисами</div>
+    <div class="services" id="svc-cards">
+
+      <div class="svc-card">
+        <div class="svc-header">
+          <span class="svc-name">AmneziaWG</span>
+          <span class="badge badge-yellow" id="svc-awg-badge"><span class="badge-dot"></span>—</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+          Протокол AmneziaWG · Docker контейнер
+        </div>
+        <div class="svc-actions">
+          <button class="btn btn-sm" onclick="svcAction('awg','start')">▶ Старт</button>
+          <button class="btn btn-sm" onclick="svcAction('awg','stop')">■ Стоп</button>
+          <button class="btn btn-sm" onclick="svcAction('awg','restart')">↺ Рестарт</button>
+        </div>
+      </div>
+
+      <div class="svc-card">
+        <div class="svc-header">
+          <span class="svc-name">VLESS / xray</span>
+          <span class="badge badge-yellow" id="svc-xray-badge"><span class="badge-dot"></span>—</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+          xray-core · Docker контейнер
+        </div>
+        <div class="svc-actions">
+          <button class="btn btn-sm" onclick="svcAction('xray','start')">▶ Старт</button>
+          <button class="btn btn-sm" onclick="svcAction('xray','stop')">■ Стоп</button>
+          <button class="btn btn-sm" onclick="svcAction('xray','restart')">↺ Рестарт</button>
+        </div>
+      </div>
+
+      <div class="svc-card">
+        <div class="svc-header">
+          <span class="svc-name">Hysteria2</span>
+          <span class="badge badge-yellow" id="svc-h2-badge"><span class="badge-dot"></span>—</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+          Hysteria2 · systemd сервис
+        </div>
+        <div class="svc-actions">
+          <button class="btn btn-sm" onclick="svcAction('hysteria2','start')">▶ Старт</button>
+          <button class="btn btn-sm" onclick="svcAction('hysteria2','stop')">■ Стоп</button>
+          <button class="btn btn-sm" onclick="svcAction('hysteria2','restart')">↺ Рестарт</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Clients ── -->
+  <div id="page-clients" class="hidden">
+    <div class="page-title">Управление клиентами</div>
+    <div class="tabs">
+      <div class="tab active" onclick="showClientTab('awg',this)">AmneziaWG</div>
+      <div class="tab" onclick="showClientTab('vless',this)">VLESS</div>
+    </div>
+
+    <!-- AWG clients -->
+    <div id="client-tab-awg">
+      <div class="section">
+        <div class="row">
+          <strong>Добавить пир</strong>
+        </div>
+        <div class="add-row">
+          <input class="input input-sm" id="awg-ip-input" placeholder="Allowed IPs, напр. 10.8.0.5/32"/>
+          <button class="btn btn-primary btn-sm" onclick="addAwgPeer()">+ Добавить</button>
+        </div>
+        <div id="awg-new-key" class="hidden">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">
+            Новый приватный ключ (скопируйте, он больше не будет показан):
+          </div>
+          <div class="key-box" id="awg-new-privkey"></div>
+          <div style="font-size:12px;color:var(--muted);margin:6px 0 2px">Публичный ключ:</div>
+          <div class="key-box" id="awg-new-pubkey"></div>
+          <button class="btn btn-sm" style="margin-top:8px" onclick="document.getElementById('awg-new-key').classList.add('hidden')">Закрыть</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Публичный ключ</th>
+            <th>Allowed IPs</th>
+            <th>Endpoint</th>
+            <th>Хендшейк</th>
+            <th>RX / TX</th>
+            <th>Статус</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="awg-peers-body">
+            <tr><td colspan="7" class="text-muted" style="text-align:center;padding:20px">Загрузка...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- VLESS clients -->
+    <div id="client-tab-vless" class="hidden">
+      <div class="section">
+        <div class="add-row">
+          <input class="input input-sm" id="vless-email-input" placeholder="Имя / email клиента"/>
+          <button class="btn btn-primary btn-sm" onclick="addVlessClient()">+ Добавить</button>
+        </div>
+        <div id="vless-new-info" class="hidden">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">UUID нового клиента:</div>
+          <div class="key-box" id="vless-new-uuid"></div>
+          <button class="btn btn-sm" style="margin-top:8px" onclick="document.getElementById('vless-new-info').classList.add('hidden')">Закрыть</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>UUID</th>
+            <th>Имя / Email</th>
+            <th>Flow</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="vless-clients-body">
+            <tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px">Загрузка...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Logs ── -->
+  <div id="page-logs" class="hidden">
+    <div class="page-title">Логи сервисов</div>
+    <div class="log-controls">
+      <select class="input" id="log-svc-select" style="max-width:180px">
+        <option value="awg">AmneziaWG</option>
+        <option value="xray">VLESS / xray</option>
+        <option value="hysteria2">Hysteria2</option>
+      </select>
+      <select class="input" id="log-lines-select" style="max-width:120px">
+        <option value="50">50 строк</option>
+        <option value="150" selected>150 строк</option>
+        <option value="300">300 строк</option>
+        <option value="500">500 строк</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="loadLogs()">Обновить</button>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--muted);font-size:13px">
+        <input type="checkbox" id="log-autoscroll" checked style="cursor:pointer"/> Автопрокрутка
+      </label>
+      <button class="btn btn-sm" onclick="copyLogs()">Копировать</button>
+    </div>
+    <div class="log-box" id="log-output">Выберите сервис и нажмите «Обновить».</div>
+  </div>
+
+</main>
+</div>
+
+<!-- Toast container -->
+<div id="toast"></div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let cpuChart, memChart;
+const POLL_INTERVAL = 5000;
+let currentPage = 'dashboard';
+let currentClientTab = 'awg';
+let autoRefreshHandle = null;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initCharts();
+  tick();
+  setInterval(tick, POLL_INTERVAL);
+  setInterval(updateClock, 1000);
+  updateClock();
+});
+
+// ─── Navigation ───────────────────────────────────────────────────────────────
+function showPage(name, el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('[id^="page-"]').forEach(p => p.classList.add('hidden'));
+  document.getElementById('page-' + name).classList.remove('hidden');
+  currentPage = name;
+  if (name === 'clients') loadCurrentClientTab();
+  if (name === 'logs')    loadLogs();
+}
+
+function showClientTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('client-tab-awg').classList.add('hidden');
+  document.getElementById('client-tab-vless').classList.add('hidden');
+  document.getElementById('client-tab-' + name).classList.remove('hidden');
+  currentClientTab = name;
+  loadCurrentClientTab();
+}
+
+function loadCurrentClientTab() {
+  if (currentClientTab === 'awg')   loadAwgPeers();
+  if (currentClientTab === 'vless') loadVlessClients();
+}
+
+// ─── Charts ───────────────────────────────────────────────────────────────────
+function sparklineOpts(color) {
+  return {
+    type: 'line',
+    data: { labels: [], datasets: [{ data: [], borderColor: color, borderWidth: 1.5,
+      fill: true, backgroundColor: color + '22', tension: 0.4, pointRadius: 0 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: { display: false, min: 0, max: 100 }
+      }
+    }
+  };
+}
+
+function initCharts() {
+  cpuChart = new Chart(document.getElementById('cpu-chart'), sparklineOpts('#58a6ff'));
+  memChart = new Chart(document.getElementById('mem-chart'), sparklineOpts('#3fb950'));
+}
+
+function updateChart(chart, history) {
+  chart.data.labels = history.map((_, i) => i);
+  chart.data.datasets[0].data = history;
+  chart.update('none');
+}
+
+// ─── Polling tick ─────────────────────────────────────────────────────────────
+async function tick() {
+  try {
+    const [sys, status] = await Promise.all([
+      fetchJSON('/api/system'),
+      fetchJSON('/api/status'),
+    ]);
+    updateSystem(sys);
+    updateStatus(status);
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString('ru-RU');
+  } catch (e) {
+    console.error('Poll error', e);
+  }
+}
+
+// ─── System metrics ───────────────────────────────────────────────────────────
+function updateSystem(d) {
+  const cpuPct = d.cpu.percent;
+  setText('cpu-val', cpuPct.toFixed(1) + '%');
+  setText('cpu-sub', `${d.cpu.count} ядер · LA ${d.load[0].toFixed(2)}`);
+  setBar('cpu-bar', cpuPct);
+
+  const memPct = d.memory.percent;
+  setText('mem-val', memPct.toFixed(1) + '%');
+  setText('mem-sub', `${d.memory.used_h} / ${d.memory.total_h}`);
+  setBar('mem-bar', memPct);
+
+  const dPct = d.disk.percent;
+  setText('disk-val', dPct.toFixed(1) + '%');
+  setText('disk-sub', `${d.disk.used_h} / ${d.disk.total_h}`);
+  setBar('disk-bar', dPct);
+
+  setText('uptime-val', d.uptime_h);
+  setText('load-sub', `LA: ${d.load[0].toFixed(2)} ${d.load[1].toFixed(2)} ${d.load[2].toFixed(2)}`);
+
+  setText('net-up',       d.network.sent_rate_h);
+  setText('net-down',     d.network.recv_rate_h);
+  setText('net-total-up', d.network.total_sent_h);
+  setText('net-total-down',d.network.total_recv_h);
+
+  updateChart(cpuChart, d.cpu.history);
+  updateChart(memChart, d.memory.history);
+}
+
+function setBar(id, pct) {
+  const el = document.getElementById(id);
+  el.style.width = pct + '%';
+  el.className = 'bar-fill ' + (pct > 85 ? 'bar-red' : pct > 65 ? 'bar-yellow' : 'bar-green');
+}
+
+// ─── Service status ────────────────────────────────────────────────────────────
+function updateStatus(d) {
+  updateSvcDash(d.awg,      'dash-awg',  'awg',  'awg-conn',  'awg-total');
+  updateSvcDash(d.xray,     'dash-xray', 'xray', 'xray-conn', null);
+  updateSvcDash(d.hysteria2,'dash-h2',   'h2',   'h2-conn',   null);
+
+  updateSvcBadge('svc-awg-badge',  d.awg.status);
+  updateSvcBadge('svc-xray-badge', d.xray.status);
+  updateSvcBadge('svc-h2-badge',   d.hysteria2.status);
+}
+
+function updateSvcDash(svc, cardId, prefix, connId, totalId) {
+  const card = document.getElementById(cardId);
+  const badge = card.querySelector('.badge');
+  const running = svc.status === 'running';
+  badge.className = 'badge ' + statusBadgeClass(svc.status);
+  badge.innerHTML = `<span class="badge-dot"></span>${statusLabel(svc.status)}`;
+  setText(connId, svc.connected ?? '—');
+  if (totalId) setText(totalId, svc.total ?? '—');
+}
+
+function updateSvcBadge(id, status) {
+  const el = document.getElementById(id);
+  el.className = 'badge ' + statusBadgeClass(status);
+  el.innerHTML = `<span class="badge-dot"></span>${statusLabel(status)}`;
+}
+
+function statusBadgeClass(s) {
+  if (s === 'running') return 'badge-green';
+  if (s === 'error' || s === 'stopped' || s === 'exited') return 'badge-red';
+  return 'badge-yellow';
+}
+
+function statusLabel(s) {
+  const m = { running:'работает', stopped:'остановлен', exited:'завершён',
+              error:'ошибка', not_found:'не найден', paused:'пауза' };
+  return m[s] || s;
+}
+
+// ─── Service actions ───────────────────────────────────────────────────────────
+async function svcAction(svc, action) {
+  const labels = { awg:'AmneziaWG', xray:'VLESS/xray', hysteria2:'Hysteria2' };
+  const actLabels = { start:'запуск', stop:'остановка', restart:'перезапуск' };
+  try {
+    await fetchJSON(`/api/services/${svc}/${action}`, { method: 'POST' });
+    toast(`${labels[svc]}: ${actLabels[action]} выполнен`, 'ok');
+    setTimeout(tick, 1500);
+  } catch (e) {
+    toast(`Ошибка: ${e.message}`, 'err');
+  }
+}
+
+// ─── AWG peers ─────────────────────────────────────────────────────────────────
+async function loadAwgPeers() {
+  const tbody = document.getElementById('awg-peers-body');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px"><span class="spinner"></span></td></tr>';
+  try {
+    const data = await fetchJSON('/api/clients/awg');
+    const peers = data.peers || [];
+    if (!peers.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:20px">Пиры не найдены</td></tr>';
+      return;
+    }
+    tbody.innerHTML = peers.map(p => `
+      <tr>
+        <td><span class="monospace" title="${esc(p.public_key)}">${esc(p.public_key)}</span></td>
+        <td><span style="font-size:12px">${esc(p.allowed_ips || '—')}</span></td>
+        <td><span style="font-size:12px">${esc(p.endpoint || '—')}</span></td>
+        <td><span style="font-size:12px">${esc(p.latest_handshake || 'Никогда')}</span></td>
+        <td><span style="font-size:12px">↓${esc(p.transfer_rx)} ↑${esc(p.transfer_tx)}</span></td>
+        <td><span class="badge ${p.connected ? 'badge-green' : 'badge-red'}">${p.connected ? 'онлайн' : 'оффлайн'}</span></td>
+        <td><button class="btn btn-danger btn-sm" onclick="removeAwgPeer('${esc(p.public_key)}')">✕</button></td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-red" style="padding:14px">Ошибка: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function addAwgPeer() {
+  const ips = document.getElementById('awg-ip-input').value.trim();
+  if (!ips) { toast('Введите Allowed IPs', 'err'); return; }
+  try {
+    const res = await fetchJSON('/api/clients/awg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowed_ips: ips }),
+    });
+    document.getElementById('awg-new-privkey').textContent = res.private_key;
+    document.getElementById('awg-new-pubkey').textContent  = res.public_key;
+    document.getElementById('awg-new-key').classList.remove('hidden');
+    document.getElementById('awg-ip-input').value = '';
+    toast('Пир добавлен', 'ok');
+    loadAwgPeers();
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'err');
+  }
+}
+
+async function removeAwgPeer(pubkey) {
+  if (!confirm('Удалить пир?')) return;
+  try {
+    await fetchJSON('/api/clients/awg/' + encodeURIComponent(pubkey), { method: 'DELETE' });
+    toast('Пир удалён', 'ok');
+    loadAwgPeers();
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'err');
+  }
+}
+
+// ─── VLESS clients ─────────────────────────────────────────────────────────────
+async function loadVlessClients() {
+  const tbody = document.getElementById('vless-clients-body');
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px"><span class="spinner"></span></td></tr>';
+  try {
+    const data = await fetchJSON('/api/clients/vless');
+    const clients = data.clients || [];
+    if (!clients.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px">Клиенты не найдены</td></tr>';
+      return;
+    }
+    tbody.innerHTML = clients.map(c => `
+      <tr>
+        <td><span class="monospace" title="${esc(c.id)}">${esc(c.id)}</span></td>
+        <td>${esc(c.email || '—')}</td>
+        <td><span style="font-size:12px">${esc(c.flow || '—')}</span></td>
+        <td><button class="btn btn-danger btn-sm" onclick="removeVlessClient('${esc(c.id)}','${esc(c.email)}')">✕</button></td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-red" style="padding:14px">Ошибка: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function addVlessClient() {
+  const email = document.getElementById('vless-email-input').value.trim();
+  if (!email) { toast('Введите имя клиента', 'err'); return; }
+  try {
+    const res = await fetchJSON('/api/clients/vless', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    document.getElementById('vless-new-uuid').textContent = res.id;
+    document.getElementById('vless-new-info').classList.remove('hidden');
+    document.getElementById('vless-email-input').value = '';
+    toast('Клиент добавлен (xray перезапущен)', 'ok');
+    loadVlessClients();
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'err');
+  }
+}
+
+async function removeVlessClient(id, email) {
+  if (!confirm(`Удалить клиента ${email || id}?`)) return;
+  try {
+    await fetchJSON('/api/clients/vless/' + encodeURIComponent(id), { method: 'DELETE' });
+    toast('Клиент удалён (xray перезапущен)', 'ok');
+    loadVlessClients();
+  } catch (e) {
+    toast('Ошибка: ' + e.message, 'err');
+  }
+}
+
+// ─── Logs ─────────────────────────────────────────────────────────────────────
+async function loadLogs() {
+  const svc   = document.getElementById('log-svc-select').value;
+  const lines = document.getElementById('log-lines-select').value;
+  const box   = document.getElementById('log-output');
+  box.textContent = 'Загрузка...';
+  try {
+    const data = await fetchJSON(`/api/logs/${svc}?lines=${lines}`);
+    renderLogs(data.logs || '');
+  } catch (e) {
+    box.textContent = 'Ошибка: ' + e.message;
+  }
+}
+
+function renderLogs(text) {
+  const box = document.getElementById('log-output');
+  box.innerHTML = '';
+  (text || '').split('\n').forEach(line => {
+    const span = document.createElement('span');
+    const lo = line.toLowerCase();
+    if (lo.includes('error') || lo.includes('err]') || lo.includes('fatal'))
+      span.className = 'log-line-err';
+    else if (lo.includes('warn'))
+      span.className = 'log-line-warn';
+    else if (lo.includes('info') || lo.includes('connect'))
+      span.className = 'log-line-info';
+    span.textContent = line;
+    box.appendChild(span);
+    box.appendChild(document.createTextNode('\n'));
+  });
+  if (document.getElementById('log-autoscroll').checked)
+    box.scrollTop = box.scrollHeight;
+}
+
+function copyLogs() {
+  const text = document.getElementById('log-output').textContent;
+  navigator.clipboard.writeText(text).then(() => toast('Скопировано', 'ok'));
+}
+
+// ─── Clock ────────────────────────────────────────────────────────────────────
+function updateClock() {
+  setText('clock', new Date().toLocaleString('ru-RU'));
+}
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function fetchJSON(url, opts = {}) {
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try { const j = await r.json(); msg = j.detail || j.error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+function toast(msg, type = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast-item toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+</script>
+</body>
+</html>
